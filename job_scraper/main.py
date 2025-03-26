@@ -7,52 +7,52 @@ from slack_sdk.models.blocks import HeaderBlock, SectionBlock, DividerBlock
 from slack_sdk.models.blocks.basic_components import PlainTextObject, MarkdownTextObject
 from dotenv import load_dotenv
 
-from models import Tender, TenderListModel
+from models import Job, JobListModel
 
 from scrapers import MercellScraper, VeramaScraper, FolqScraper
 
 
-class TenderChangeDetector:
+class NewJobPostDetector:
     """
-    Loads known tenders (from a JSON file), compares them with newly scraped
+    Loads known jobs (from a JSON file), compares them with newly scraped
     ones, and helps you figure out which are new.
     """
 
     def __init__(self, file_path: str):
         self.file_path = file_path
-        self.known_tenders: List[Tender] = []
+        self.known_jobs: List[Job] = []
 
         if os.path.isfile(self.file_path):
             with open(self.file_path, "r") as f:
                 contents = f.read()
-                self.known_tenders = TenderListModel.validate_json(contents)
+                self.known_jobs = JobListModel.validate_json(contents)
 
         # We'll store known IDs in a set for quick membership checks
-        self.known_ids = {t.tender_id for t in self.known_tenders}
+        self.known_ids = {t.job_id for t in self.known_jobs}
 
-    def detect_new_tenders(self, scraped_tenders: List[Tender]) -> List[Tender]:
+    def detect_new_jobs(self, scraped_jobs: List[Job]) -> List[Job]:
         """
-        Returns a sublist of `scraped_tenders` whose IDs
+        Returns a sublist of `scraped_jobs` whose IDs
         do not appear in `self.known_ids`.
         """
-        new_ones = [t for t in scraped_tenders if t.tender_id not in self.known_ids]
+        new_ones = [t for t in scraped_jobs if t.job_id not in self.known_ids]
         return new_ones
 
-    def update_known_tenders(self, new_tenders: List[Tender]) -> None:
+    def update_known_jobs(self, new_jobs: List[Job]) -> None:
         """
-        Adds the newly scraped tenders to our known list
+        Adds the newly scraped jobs to our known list
         (if they're not already known) and writes them to disk.
         """
         updated = False
-        for t in new_tenders:
-            if t.tender_id not in self.known_ids:
-                self.known_tenders.append(t)
-                self.known_ids.add(t.tender_id)
+        for t in new_jobs:
+            if t.job_id not in self.known_ids:
+                self.known_jobs.append(t)
+                self.known_ids.add(t.job_id)
                 updated = True
 
         if updated:
             # Write out the updated list to disk
-            json_bytes = TenderListModel.dump_json(self.known_tenders, indent=4)
+            json_bytes = JobListModel.dump_json(self.known_jobs, indent=4)
             with open(self.file_path, "wb") as f:
                 f.write(json_bytes)
 
@@ -68,15 +68,15 @@ class SlackPoster:
 
         self.client = WebClient(token=self.token)
 
-    def create_tender_slack_message(self, tender: Tender):
+    def create_job_slack_message(self, job: Job):
         """
         Returns (text, blocks) for Slack chat_postMessage.
         """
-        title = tender.tender_overview.title
-        company = tender.tender_overview.company
-        due_date = tender.tender_overview.delivery_date
-        desc = tender.description
-        link = tender.tender_overview.tender_uri
+        title = job.job_overview.title
+        company = job.job_overview.company
+        due_date = job.job_overview.delivery_date
+        desc = job.description
+        link = job.job_overview.job_uri
 
         # Slack API only allows a maximum of 3000 characters.
         # Limit it to 1000 to not make it too noisy.
@@ -90,7 +90,7 @@ class SlackPoster:
                 fields=[
                     MarkdownTextObject(text=f"*Kunde:*\n{company}"),
                     MarkdownTextObject(text=f"*Frist:*\n{due_date}"),
-                    MarkdownTextObject(text=f"*Plattform:*\n{tender.platform}"),
+                    MarkdownTextObject(text=f"*Plattform:*\n{job.platform}"),
                 ]
             ),
             DividerBlock(),
@@ -100,11 +100,11 @@ class SlackPoster:
         ]
         return main_text, blocks
 
-    def post_tender(self, tender: Tender, channel: str = "job-posting-testing-dev"):
+    def post_job(self, job: Job, channel: str = "job-posting-testing-dev"):
         """
-        Posts a single tender to Slack.
+        Posts a single job to Slack.
         """
-        text, blocks = self.create_tender_slack_message(tender)
+        text, blocks = self.create_job_slack_message(job)
 
         try:
             response = self.client.chat_postMessage(
@@ -121,19 +121,19 @@ async def main():
     slack_poster = SlackPoster()
     scrapers = [MercellScraper(), VeramaScraper(), FolqScraper()]
 
-    scraped_tenders = []
+    scraped_jobs = []
     for scraper in scrapers:
-        scraped_tenders.extend(await scraper.scrape_tenders())
+        scraped_jobs.extend(await scraper.scrape_jobs())
 
-    change_detector = TenderChangeDetector("tenders.json")
+    change_detector = NewJobPostDetector("jobs.json")
 
-    new_tenders = change_detector.detect_new_tenders(scraped_tenders)
-    print(f"Found {len(scraped_tenders)} tenders in total, {len(new_tenders)} are new.")
+    new_jobs = change_detector.detect_new_jobs(scraped_jobs)
+    print(f"Found {len(scraped_jobs)} jobs in total, {len(new_jobs)} are new.")
 
-    for tender in new_tenders:
-        slack_poster.post_tender(tender)
+    for job in new_jobs:
+        slack_poster.post_job(job)
 
-    change_detector.update_known_tenders(new_tenders)
+    change_detector.update_known_jobs(new_jobs)
 
 
 if __name__ == "__main__":
