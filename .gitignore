@@ -1,0 +1,4 @@
+.env
+tenders.json
+
+__pycache__/

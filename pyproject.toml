@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "assignment-scraper"
+version = "0.1.0"
+description = ""
+authors = ["Daniel Sørenes <daniel@sorenes.no>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+playwright = "^1.51.0"
+pydantic = "^2.10.6"
+slack-sdk = "^3.35.0"
+python-dotenv = "^1.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
