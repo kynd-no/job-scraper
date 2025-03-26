@@ -5,13 +5,11 @@ from pydantic.dataclasses import dataclass
 
 @dataclass
 class TenderOverview:
-    job_type: str
-    title: str
-    company: str
-    description: str
-    delivery_date: str
-    status: str
-    tender_uri: str
+    title: str | None = None
+    company: str | None = None
+    description: str | None = None
+    delivery_date: str | None = None
+    tender_uri: str | None = None
 
 
 class Tender(BaseModel):
@@ -19,12 +17,8 @@ class Tender(BaseModel):
     description: str
 
     @computed_field
-    def full_tender_uri(self) -> str:
-        return "https://my.mercell.com" + self.tender_overview.tender_uri
-
-    @computed_field
     def tender_id(self) -> str:
-        return self.tender_overview.tender_uri.split("/")[-1].split(".")[0]
+        return self.tender_overview.tender_uri
 
 
 TenderList: TypeAlias = list[Tender]

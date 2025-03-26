@@ -14,6 +14,98 @@ class JobScraper(ABC):
     async def scrape_tenders(self) -> List[Tender]: ...
 
 
+class VeramaScraper(JobScraper):
+    BASE_URL = "https://app.verama.com/app"
+
+    def __init__(self):
+        self.username = os.getenv("VERAMA_USERNAME")
+        self.password = os.getenv("VERAMA_PASSWORD")
+
+        if not self.username or not self.password:
+            raise ValueError(
+                "Missing VERAMA_USERNAME or VERAMA_PASSWORD environment variables. Check .env"
+            )
+
+    async def _login(self, page: Page) -> None:
+        await page.goto("https://app.verama.com/auth?tab=login")
+        await page.fill("input[name='username']", self.username)
+        await page.fill("input[name='password']", self.password)
+        await page.get_by_role("button", name="Log in").click()
+
+    async def scrape_tenders(self) -> List[Tender]:
+        async with async_playwright() as p:
+            browser: Browser = await p.chromium.launch()
+            page: Page = await browser.new_page()
+            await self._login(page)
+            job_overviews: List[TenderOverview] = await self._parse_tender_overview(
+                page
+            )
+
+            tenders: List[Tender] = await self._traverse_tender_pages(page, job_overviews)
+
+            await browser.close()
+            return tenders
+
+    async def _traverse_tender_pages(self, page: Page, tenders: List[TenderOverview]) -> List[Tender]:
+        jobs: List[Tender] = []
+        for job_overview in tenders:
+            await page.goto(
+                job_overview.tender_uri,
+                wait_until="domcontentloaded",
+            )
+            deadline_locator = page.locator(
+                "//span[text()='Application deadline']/following-sibling::span[1]"
+            )
+
+            deadline_text = await deadline_locator.inner_text()
+            deadline = deadline_text.split("(")[0].strip()
+            job_overview.delivery_date = deadline
+
+            company_locator = page.locator(
+                "//span[text()='Client']/following-sibling::span[1]"
+            )
+            company = await company_locator.text_content()
+            job_overview.company = company
+
+            assignment_description_locator = await page.query_selector(
+                "div.job-request-detail__section"
+            )
+            description = await assignment_description_locator.text_content()
+
+            jobs.append(Tender(tender_overview=job_overview, description=description))
+
+        return jobs
+
+    async def _parse_tender_overview(self, page: Page) -> List[TenderOverview]:
+        # https://app.verama.com/app/job-requests
+        await page.goto(
+            f"{self.BASE_URL}/job-requests?page=0&size=20&sortConfig=%5B%7B%22sortBy%22%3A%22firstDayOfApplications%22%2C%22order%22%3A%22DESC%22%7D%5D&filtersConfig=%7B%22location%22%3A%7B%22id%22%3Anull%2C%22signature%22%3A%22%22%2C%22city%22%3A%22Oslo%22%2C%22country%22%3A%22Norway%22%2C%22name%22%3A%22Oslo%2C%20Norway%22%2C%22locationId%22%3A%22here%3Acm%3Anamedplace%3A20421988%22%2C%22countryCode%22%3A%22NOR%22%2C%22suggestedPhoneCode%22%3A%22NO%22%7D%2C%22remote%22%3A%5B%5D%2C%22query%22%3A%22%22%2C%22skillRoleCategories%22%3A%5B%5D%2C%22frequency%22%3A%22DAILY%22%2C%22radius%22%3A20000%2C%22dedicated%22%3Afalse%2C%22originIds%22%3A%5B%5D%2C%22favouritesOnly%22%3Afalse%2C%22recommendedOnly%22%3Afalse%2C%22languages%22%3A%5B%5D%2C%22level%22%3A%5B%5D%2C%22skillIds%22%3A%5B%5D%2C%22skills%22%3A%5B%5D%7D",
+            wait_until="networkidle",
+        )
+
+        job_sections = await page.query_selector_all('a[class="route-section"]')
+
+        if not job_sections:
+            print("Could not find any job listings")
+            return []
+
+        tenders: List[TenderOverview] = []
+        for job_section in job_sections:
+            job_uri = await job_section.get_attribute("href")
+
+            job_title_el = await job_section.query_selector(
+                "span.job-request-record__header"
+            )
+            job_title = await job_title_el.text_content()
+
+            tenders.append(
+                TenderOverview(title=job_title, tender_uri=self.BASE_URL + job_uri)
+            )
+
+        print(f"Found {len(tenders)} tenders")
+        return tenders
+
+
 class MercellScraper(JobScraper):
     BASE_URL = "https://my.mercell.com"
 
@@ -111,11 +203,7 @@ class MercellScraper(JobScraper):
                 # Not enough columns to parse the data we need
                 continue
 
-            # 1) job_type: column index 3
-            job_type_el = tds[3]
-            job_type = (await job_type_el.inner_text() or "").strip()
-
-            # 2) The main column with link and company: column index 4
+            # 1) The main column with link and company: column index 4
             main_col = tds[4]
             # - The "title" link is the <a class="hide100pct">
             title_a = await main_col.query_selector("a.hide100pct")
@@ -137,19 +225,13 @@ class MercellScraper(JobScraper):
             date_el = tds[5]
             delivery_date = (await date_el.inner_text() or "").strip()
 
-            # 4) Status: column index 6
-            status_el = tds[6]
-            status_text = (await status_el.inner_text() or "").strip()
-
             results.append(
                 TenderOverview(
-                    job_type=job_type,
                     title=title_text,
                     company=company_text,
                     description="",  # or parse from tooltip if needed
                     delivery_date=delivery_date,
-                    status=status_text,
-                    tender_uri=tender_href,
+                    tender_uri=self.BASE_URL + tender_href,
                 )
             )
 
@@ -161,7 +243,7 @@ class MercellScraper(JobScraper):
         tenders: List[Tender] = []
         for tender_overview in tender_overviews:
             await page.goto(
-                self.BASE_URL + tender_overview.tender_uri,
+                tender_overview.tender_uri,
                 wait_until="domcontentloaded",
             )
             desc_el = await page.query_selector(

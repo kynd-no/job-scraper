@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from models import Tender, TenderListModel
 
-from scrapers import MercellScraper
+from scrapers import MercellScraper, VeramaScraper
 
 
 class TenderChangeDetector:
@@ -76,7 +76,12 @@ class SlackPoster:
         company = tender.tender_overview.company
         due_date = tender.tender_overview.delivery_date
         desc = tender.description
-        link = tender.full_tender_uri
+        link = tender.tender_overview.tender_uri
+
+        # Slack API only allows a maximum of 3000 characters.
+        # Limit it to 1000 to not make it too noisy.
+        if len(desc) > 3000:
+            desc = desc[:1000]
 
         main_text = f"Ny utlysning fra {company}"
         blocks = [
@@ -112,11 +117,13 @@ class SlackPoster:
 
 async def main():
     load_dotenv()
-    mercell_scraper = MercellScraper()
 
     slack_poster = SlackPoster()
+    scrapers = [MercellScraper(), VeramaScraper()]
 
-    scraped_tenders = await mercell_scraper.scrape_tenders()
+    scraped_tenders = []
+    for scraper in scrapers:
+        scraped_tenders.extend(await scraper.scrape_tenders())
 
     change_detector = TenderChangeDetector("tenders.json")
 
