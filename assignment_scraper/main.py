@@ -14,7 +14,7 @@ from scrapers import MercellScraper
 
 class TenderChangeDetector:
     """
-    Loads known tenders (from a JSON file), compares them with newly scraped 
+    Loads known tenders (from a JSON file), compares them with newly scraped
     ones, and helps you figure out which are new.
     """
 
@@ -40,7 +40,7 @@ class TenderChangeDetector:
 
     def update_known_tenders(self, new_tenders: List[Tender]) -> None:
         """
-        Adds the newly scraped tenders to our known list 
+        Adds the newly scraped tenders to our known list
         (if they're not already known) and writes them to disk.
         """
         updated = False
@@ -55,6 +55,7 @@ class TenderChangeDetector:
             json_bytes = TenderListModel.dump_json(self.known_tenders, indent=4)
             with open(self.file_path, "wb") as f:
                 f.write(json_bytes)
+
 
 class SlackPoster:
     client: WebClient
@@ -126,6 +127,7 @@ async def main():
         slack_poster.post_tender(tender)
 
     change_detector.update_known_tenders(new_tenders)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

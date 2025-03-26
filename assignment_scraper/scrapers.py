@@ -5,6 +5,7 @@ from typing import List
 
 from models import Tender, TenderOverview
 
+
 class JobScraper(ABC):
 
     def __init__(self): ...

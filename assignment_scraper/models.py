@@ -2,6 +2,7 @@ from typing import TypeAlias
 from pydantic import BaseModel, TypeAdapter, computed_field
 from pydantic.dataclasses import dataclass
 
+
 @dataclass
 class TenderOverview:
     job_type: str
@@ -28,5 +29,3 @@ class Tender(BaseModel):
 
 TenderList: TypeAlias = list[Tender]
 TenderListModel = TypeAdapter(TenderList)
-
-
