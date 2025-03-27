@@ -15,6 +15,7 @@ class TenderOverview:
 class Tender(BaseModel):
     tender_overview: TenderOverview
     description: str
+    platform: str | None = None
 
     @computed_field
     def tender_id(self) -> str:
