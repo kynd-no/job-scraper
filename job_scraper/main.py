@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from models import Tender, TenderListModel
 
-from scrapers import MercellScraper, VeramaScraper
+from scrapers import MercellScraper, VeramaScraper, FolqScraper
 
 
 class TenderChangeDetector:
@@ -120,7 +120,7 @@ async def main():
     load_dotenv()
 
     slack_poster = SlackPoster()
-    scrapers = [MercellScraper(), VeramaScraper()]
+    scrapers = [MercellScraper(), VeramaScraper(), FolqScraper()]
 
     scraped_tenders = []
     for scraper in scrapers:
