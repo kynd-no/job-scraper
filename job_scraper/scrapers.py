@@ -149,14 +149,19 @@ class VeramaScraper(JobScraper):
                 page
             )
 
-            tenders: List[Tender] = await self._traverse_tender_pages(page, job_overviews)
+            tenders: List[Tender] = await self._traverse_tender_pages(
+                page, job_overviews
+            )
 
             await browser.close()
             return tenders
 
-    async def _traverse_tender_pages(self, page: Page, tenders: List[TenderOverview]) -> List[Tender]:
+    async def _traverse_tender_pages(
+        self, page: Page, tenders: List[TenderOverview]
+    ) -> List[Tender]:
         jobs: List[Tender] = []
         for job_overview in tenders:
+            print(f"Navigating to {job_overview.tender_uri}")
             await page.goto(
                 job_overview.tender_uri,
                 wait_until="domcontentloaded",
@@ -251,7 +256,7 @@ class MercellScraper(JobScraper):
             return tenders
 
     async def _login(self, page: Page) -> None:
-        await page.goto("https://my.mercell.com/en/m/logon/default.aspx?auth0done=true")
+        await page.goto(self.BASE_URL + "/en/m/logon/default.aspx?auth0done=true")
         await page.get_by_role("textbox").fill(self.username)
         await page.get_by_text("Continue").click()
         await page.locator('//*[@id="password"]').fill(self.password)
