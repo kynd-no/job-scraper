@@ -90,6 +90,7 @@ class SlackPoster:
                 fields=[
                     MarkdownTextObject(text=f"*Kunde:*\n{company}"),
                     MarkdownTextObject(text=f"*Frist:*\n{due_date}"),
+                    MarkdownTextObject(text=f"*Plattform:*\n{tender.platform}"),
                 ]
             ),
             DividerBlock(),

@@ -16,6 +16,7 @@ class JobScraper(ABC):
 
 class VeramaScraper(JobScraper):
     BASE_URL = "https://app.verama.com/app"
+    job_platform: str = "Verama"
 
     def __init__(self):
         self.username = os.getenv("VERAMA_USERNAME")
@@ -72,7 +73,13 @@ class VeramaScraper(JobScraper):
             )
             description = await assignment_description_locator.text_content()
 
-            jobs.append(Tender(tender_overview=job_overview, description=description))
+            jobs.append(
+                Tender(
+                    tender_overview=job_overview,
+                    description=description,
+                    platform=self.job_platform,
+                )
+            )
 
         return jobs
 
@@ -108,6 +115,7 @@ class VeramaScraper(JobScraper):
 
 class MercellScraper(JobScraper):
     BASE_URL = "https://my.mercell.com"
+    job_platform: str = "Mercell"
 
     def __init__(self) -> None:
         self.username = os.getenv("MERCELL_USERNAME")
@@ -252,7 +260,11 @@ class MercellScraper(JobScraper):
             full_desc = await desc_el.text_content() if desc_el else ""
 
             tenders.append(
-                Tender(tender_overview=tender_overview, description=full_desc)
+                Tender(
+                    tender_overview=tender_overview,
+                    description=full_desc,
+                    platform=self.job_platform,
+                )
             )
 
         return tenders
