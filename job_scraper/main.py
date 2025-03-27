@@ -110,7 +110,6 @@ class SlackPoster:
             response = self.client.chat_postMessage(
                 channel=channel, text=text, blocks=blocks
             )
-            print("Slack response:", response)
             return response
         except SlackApiError as e:
             print(f"Slack API Error: {e.response['error']}")
