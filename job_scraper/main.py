@@ -1,5 +1,7 @@
 import asyncio
 import os
+import logging
+from playwright.async_api import Browser, Page, async_playwright, BrowserContext
 from typing import List
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -10,6 +12,8 @@ from dotenv import load_dotenv
 from models import Job, JobListModel
 
 from scrapers import MercellScraper, VeramaScraper, FolqScraper
+
+logging.basicConfig(level=logging.INFO)
 
 
 class NewJobPostDetector:
@@ -115,20 +119,42 @@ class SlackPoster:
             print(f"Slack API Error: {e.response['error']}")
 
 
+async def run_scrapers() -> List[Job]:
+    async with async_playwright() as p:
+        browser: Browser = await p.chromium.launch()
+        scrapers = [
+            MercellScraper(browser),
+            VeramaScraper(browser),
+            FolqScraper(browser),
+        ]
+
+        tasks = [scraper.scrape_jobs() for scraper in scrapers]
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        scraped_jobs = []
+        for scraper, result in zip(scrapers, results):
+            if isinstance(result, Exception):
+                logging.error(
+                    f"Could not scrape {scraper.job_platform}: error {result}"
+                )
+            else:
+                scraped_jobs.extend(result)
+        await browser.close()
+        return scraped_jobs
+
+
 async def main():
     load_dotenv()
 
-    slack_poster = SlackPoster()
-    scrapers = [MercellScraper(), VeramaScraper(), FolqScraper()]
+    scraped_jobs: List[Job] = await run_scrapers()
 
-    scraped_jobs = []
-    for scraper in scrapers:
-        scraped_jobs.extend(await scraper.scrape_jobs())
+    slack_poster = SlackPoster()
 
     change_detector = NewJobPostDetector("jobs.json")
 
     new_jobs = change_detector.detect_new_jobs(scraped_jobs)
-    print(f"Found {len(scraped_jobs)} jobs in total, {len(new_jobs)} are new.")
+    logging.info(f"Found {len(scraped_jobs)} jobs in total, {len(new_jobs)} are new.")
 
     for job in new_jobs:
         slack_poster.post_job(job)

@@ -1,14 +1,23 @@
 import os
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import Browser, Page, async_playwright, BrowserContext
 from abc import ABC, abstractmethod
 from typing import List
 
 from models import Job, JobOverview
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
 
 class JobScraper(ABC):
+    browser: Browser
 
-    def __init__(self): ...
+    def __init__(self, browser: Browser):
+        self.browser = browser
 
     @abstractmethod
     async def scrape_jobs(self) -> List[Job]: ...
@@ -17,8 +26,10 @@ class JobScraper(ABC):
 class FolqScraper(JobScraper):
     BASE_URL = "https://app.folq.com"
     job_platform: str = "Folq"
+    browser: Browser
 
-    def __init__(self):
+    def __init__(self, browser: Browser):
+        self.browser = browser
         self.username = os.getenv("FOLQ_USERNAME")
         self.password = os.getenv("FOLQ_PASSWORD")
 
@@ -36,16 +47,16 @@ class FolqScraper(JobScraper):
         await page.wait_for_timeout(5000)
 
     async def scrape_jobs(self) -> List[Job]:
-        async with async_playwright() as p:
-            browser: Browser = await p.chromium.launch()
-            page: Page = await browser.new_page()
-            await self._login(page)
-            job_overviews: List[JobOverview] = await self._parse_job_overview(page)
+        logging.info(f"Starting {self.job_platform}")
+        browser_context: BrowserContext = await self.browser.new_context()
+        page: Page = await browser_context.new_page()
+        await self._login(page)
+        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
 
-            jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
+        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
 
-            await browser.close()
-            return jobs
+        await browser_context.close()
+        return jobs
 
     async def _traverse_job_pages(
         self, page: Page, job_overviews: List[JobOverview]
@@ -118,14 +129,17 @@ class FolqScraper(JobScraper):
                 )
             )
 
+        logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
 
 class VeramaScraper(JobScraper):
     BASE_URL = "https://app.verama.com/app"
     job_platform: str = "Verama"
+    browser: Browser
 
-    def __init__(self):
+    def __init__(self, browser: Browser):
+        self.browser = browser
         self.username = os.getenv("VERAMA_USERNAME")
         self.password = os.getenv("VERAMA_PASSWORD")
 
@@ -141,20 +155,16 @@ class VeramaScraper(JobScraper):
         await page.get_by_role("button", name="Log in").click()
 
     async def scrape_jobs(self) -> List[Job]:
-        async with async_playwright() as p:
-            browser: Browser = await p.chromium.launch()
-            page: Page = await browser.new_page()
-            await self._login(page)
-            job_overviews: List[JobOverview] = await self._parse_job_overview(
-                page
-            )
+        logging.info(f"Starting {self.job_platform}")
+        browser_context: BrowserContext = await self.browser.new_context()
+        page: Page = await browser_context.new_page()
+        await self._login(page)
+        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
 
-            jobs: List[Job] = await self._traverse_job_pages(
-                page, job_overviews
-            )
+        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
 
-            await browser.close()
-            return jobs
+        await browser_context.close()
+        return jobs
 
     async def _traverse_job_pages(
         self, page: Page, job_overviews: List[JobOverview]
@@ -204,7 +214,7 @@ class VeramaScraper(JobScraper):
         job_sections = await page.query_selector_all('a[class="route-section"]')
 
         if not job_sections:
-            print("Could not find any job listings")
+            logging.info("Could not find any job listings")
             return []
 
         jobs: List[JobOverview] = []
@@ -216,19 +226,19 @@ class VeramaScraper(JobScraper):
             )
             job_title = await job_title_el.text_content()
 
-            jobs.append(
-                JobOverview(title=job_title, job_uri=self.BASE_URL + job_uri)
-            )
+            jobs.append(JobOverview(title=job_title, job_uri=self.BASE_URL + job_uri))
 
-        print(f"Found {len(jobs)} jobs")
+        logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
 
 class MercellScraper(JobScraper):
     BASE_URL = "https://my.mercell.com"
     job_platform: str = "Mercell"
+    browser_context: Browser
 
-    def __init__(self) -> None:
+    def __init__(self, browser: Browser) -> None:
+        self.browser = browser
         self.username = os.getenv("MERCELL_USERNAME")
         self.password = os.getenv("MERCELL_PASSWORD")
 
@@ -238,21 +248,17 @@ class MercellScraper(JobScraper):
             )
 
     async def scrape_jobs(self) -> List[Job]:
-        async with async_playwright() as p:
-            browser: Browser = await p.chromium.launch()
-            page: Page = await browser.new_page()
-            await self._login(page)
-            job_overviews: List[JobOverview] = await self._parse_job_overview(
-                page
-            )
+        logging.info(f"Starting {self.job_platform}")
+        browser_context: BrowserContext = await self.browser.new_context()
+        page: Page = await browser_context.new_page()
+        await self._login(page)
+        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
 
-            jobs: List[Job] = await self._traverse_job_pages(
-                page, job_overviews
-            )
+        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
 
-            await browser.close()
+        await browser_context.close()
 
-            return jobs
+        return jobs
 
     async def _login(self, page: Page) -> None:
         await page.goto(self.BASE_URL + "/en/m/logon/default.aspx?auth0done=true")
@@ -268,8 +274,8 @@ class MercellScraper(JobScraper):
                     f"{self.BASE_URL}/m/mts/MyTenders.aspx", wait_until="networkidle"
                 )
                 break
-            except TimeoutError as e:
-                print(f"Timeout error: {e} (attempt {attempt+1}/3)")
+            except Exception as e:
+                logging.error(f"Error: {e} (attempt {attempt+1}/3)")
         else:
             raise TimeoutError("Cannot load MyTenders.aspx after 3 attempts")
 
@@ -285,7 +291,7 @@ class MercellScraper(JobScraper):
                 # No more pages
                 break
 
-        print(f"Found {len(jobs)} jobs")
+        logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
     async def _parse_job_overview_table(self, page: Page) -> List[JobOverview]:
@@ -297,7 +303,7 @@ class MercellScraper(JobScraper):
         table_selector = "#ctl00_ctl00_commonContent_mainContent_ucTenderList_gwTenders_GridViewTop_GridView"
         table = await page.query_selector(table_selector)
         if not table:
-            print("Could not find the table on this page.")
+            logging.warning("Could not find the table on this page.")
             return []
 
         # Get all <tr> inside <tbody>
