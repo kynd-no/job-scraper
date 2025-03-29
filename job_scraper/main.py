@@ -1,7 +1,7 @@
 import asyncio
 import os
 import logging
-from playwright.async_api import Browser, Page, async_playwright, BrowserContext
+from playwright.async_api import Browser, async_playwright
 from typing import List
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
@@ -11,7 +11,9 @@ from dotenv import load_dotenv
 
 from models import Job, JobListModel
 
-from scrapers import MercellScraper, VeramaScraper, FolqScraper
+from scrapers.folq import FolqScraper
+from scrapers.verama import VeramaScraper
+from scrapers.mercell import MercellScraper
 
 logging.basicConfig(level=logging.INFO)
 
