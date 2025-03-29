@@ -157,11 +157,10 @@ class VeramaScraper(JobScraper):
             return jobs
 
     async def _traverse_job_pages(
-        self, page: Page, jobs: List[JobOverview]
+        self, page: Page, job_overviews: List[JobOverview]
     ) -> List[Job]:
         jobs: List[Job] = []
-        for job_overview in jobs:
-            print(f"Navigating to {job_overview.job_uri}")
+        for job_overview in job_overviews:
             await page.goto(
                 job_overview.job_uri,
                 wait_until="domcontentloaded",
