@@ -1,5 +1,5 @@
 import os
-from playwright.async_api import Browser, Page, async_playwright, BrowserContext
+from playwright.async_api import Browser, Page, BrowserContext
 from abc import ABC, abstractmethod
 from typing import List
 
@@ -15,28 +15,51 @@ logging.basicConfig(
 
 class JobScraper(ABC):
     browser: Browser
+    job_platform: str
+    base_url: str
 
     def __init__(self, browser: Browser):
         self.browser = browser
+        self.username, self.password = self._load_credentials()
+
+    def _load_credentials(self) -> tuple[str, str]:
+        prefix = self.job_platform.upper()
+        username = os.getenv(f"{prefix}_USERNAME")
+        password = os.getenv(f"{prefix}_PASSWORD")
+        if not username or not password:
+            raise ValueError(
+                f"Missing {prefix}_USERNAME or {prefix}_PASSWORD in environment"
+            )
+        return username, password
+
+    async def scrape_jobs(self) -> List[Job]:
+        logging.info(f"Starting {self.job_platform}")
+
+        context: BrowserContext = await self.browser.new_context()
+        page = await context.new_page()
+
+        await self._login(page)
+        overviews: List[JobOverview] = await self._parse_job_overview(page)
+        jobs: List[Job] = await self._traverse_job_pages(page, overviews)
+
+        await context.close()
+        return jobs
 
     @abstractmethod
-    async def scrape_jobs(self) -> List[Job]: ...
+    async def _login(self, page: Page): ...
+
+    @abstractmethod
+    async def _parse_job_overview(self, page: Page) -> List[JobOverview]: ...
+
+    @abstractmethod
+    async def _traverse_job_pages(
+        self, page: Page, job_overviews: List[JobOverview]
+    ) -> List[Job]: ...
 
 
 class FolqScraper(JobScraper):
-    BASE_URL = "https://app.folq.com"
+    base_url = "https://app.folq.com"
     job_platform: str = "Folq"
-    browser: Browser
-
-    def __init__(self, browser: Browser):
-        self.browser = browser
-        self.username = os.getenv("FOLQ_USERNAME")
-        self.password = os.getenv("FOLQ_PASSWORD")
-
-        if not self.username or not self.password:
-            raise ValueError(
-                "Missing FOLQ_USERNAME or FOLQ_PASSWORD environment variables. Check .env"
-            )
 
     async def _login(self, page: Page) -> None:
         await page.goto("https://app.folq.com/login")
@@ -45,18 +68,6 @@ class FolqScraper(JobScraper):
         await page.click("button[type='submit']")
         # Folq redirect is slow
         await page.wait_for_timeout(5000)
-
-    async def scrape_jobs(self) -> List[Job]:
-        logging.info(f"Starting {self.job_platform}")
-        browser_context: BrowserContext = await self.browser.new_context()
-        page: Page = await browser_context.new_page()
-        await self._login(page)
-        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
-
-        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
-
-        await browser_context.close()
-        return jobs
 
     async def _traverse_job_pages(
         self, page: Page, job_overviews: List[JobOverview]
@@ -86,7 +97,7 @@ class FolqScraper(JobScraper):
 
     async def _parse_job_overview(self, page: Page) -> List[JobOverview]:
         await page.goto(
-            f"{self.BASE_URL}/assignments/all?sorting=by-deadline",
+            f"{self.base_url}/assignments/all?sorting=by-deadline",
             wait_until="domcontentloaded",
         )
 
@@ -123,7 +134,7 @@ class FolqScraper(JobScraper):
             jobs.append(
                 JobOverview(
                     title=job_title,
-                    job_uri=self.BASE_URL + job_href,
+                    job_uri=self.base_url + job_href,
                     company=company_text,
                     delivery_date=due_date_text,
                 )
@@ -134,37 +145,14 @@ class FolqScraper(JobScraper):
 
 
 class VeramaScraper(JobScraper):
-    BASE_URL = "https://app.verama.com/app"
+    base_url = "https://app.verama.com/app"
     job_platform: str = "Verama"
-    browser: Browser
-
-    def __init__(self, browser: Browser):
-        self.browser = browser
-        self.username = os.getenv("VERAMA_USERNAME")
-        self.password = os.getenv("VERAMA_PASSWORD")
-
-        if not self.username or not self.password:
-            raise ValueError(
-                "Missing VERAMA_USERNAME or VERAMA_PASSWORD environment variables. Check .env"
-            )
 
     async def _login(self, page: Page) -> None:
         await page.goto("https://app.verama.com/auth?tab=login")
         await page.fill("input[name='username']", self.username)
         await page.fill("input[name='password']", self.password)
         await page.get_by_role("button", name="Log in").click()
-
-    async def scrape_jobs(self) -> List[Job]:
-        logging.info(f"Starting {self.job_platform}")
-        browser_context: BrowserContext = await self.browser.new_context()
-        page: Page = await browser_context.new_page()
-        await self._login(page)
-        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
-
-        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
-
-        await browser_context.close()
-        return jobs
 
     async def _traverse_job_pages(
         self, page: Page, job_overviews: List[JobOverview]
@@ -207,7 +195,7 @@ class VeramaScraper(JobScraper):
     async def _parse_job_overview(self, page: Page) -> List[JobOverview]:
         # https://app.verama.com/app/job-requests
         await page.goto(
-            f"{self.BASE_URL}/job-requests?page=0&size=20&sortConfig=%5B%7B%22sortBy%22%3A%22firstDayOfApplications%22%2C%22order%22%3A%22DESC%22%7D%5D&filtersConfig=%7B%22location%22%3A%7B%22id%22%3Anull%2C%22signature%22%3A%22%22%2C%22city%22%3A%22Oslo%22%2C%22country%22%3A%22Norway%22%2C%22name%22%3A%22Oslo%2C%20Norway%22%2C%22locationId%22%3A%22here%3Acm%3Anamedplace%3A20421988%22%2C%22countryCode%22%3A%22NOR%22%2C%22suggestedPhoneCode%22%3A%22NO%22%7D%2C%22remote%22%3A%5B%5D%2C%22query%22%3A%22%22%2C%22skillRoleCategories%22%3A%5B%5D%2C%22frequency%22%3A%22DAILY%22%2C%22radius%22%3A20000%2C%22dedicated%22%3Afalse%2C%22originIds%22%3A%5B%5D%2C%22favouritesOnly%22%3Afalse%2C%22recommendedOnly%22%3Afalse%2C%22languages%22%3A%5B%5D%2C%22level%22%3A%5B%5D%2C%22skillIds%22%3A%5B%5D%2C%22skills%22%3A%5B%5D%7D",
+            f"{self.base_url}/job-requests?page=0&size=20&sortConfig=%5B%7B%22sortBy%22%3A%22firstDayOfApplications%22%2C%22order%22%3A%22DESC%22%7D%5D&filtersConfig=%7B%22location%22%3A%7B%22id%22%3Anull%2C%22signature%22%3A%22%22%2C%22city%22%3A%22Oslo%22%2C%22country%22%3A%22Norway%22%2C%22name%22%3A%22Oslo%2C%20Norway%22%2C%22locationId%22%3A%22here%3Acm%3Anamedplace%3A20421988%22%2C%22countryCode%22%3A%22NOR%22%2C%22suggestedPhoneCode%22%3A%22NO%22%7D%2C%22remote%22%3A%5B%5D%2C%22query%22%3A%22%22%2C%22skillRoleCategories%22%3A%5B%5D%2C%22frequency%22%3A%22DAILY%22%2C%22radius%22%3A20000%2C%22dedicated%22%3Afalse%2C%22originIds%22%3A%5B%5D%2C%22favouritesOnly%22%3Afalse%2C%22recommendedOnly%22%3Afalse%2C%22languages%22%3A%5B%5D%2C%22level%22%3A%5B%5D%2C%22skillIds%22%3A%5B%5D%2C%22skills%22%3A%5B%5D%7D",
             wait_until="networkidle",
         )
 
@@ -226,42 +214,18 @@ class VeramaScraper(JobScraper):
             )
             job_title = await job_title_el.text_content()
 
-            jobs.append(JobOverview(title=job_title, job_uri=self.BASE_URL + job_uri))
+            jobs.append(JobOverview(title=job_title, job_uri=self.base_url + job_uri))
 
         logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
 
 class MercellScraper(JobScraper):
-    BASE_URL = "https://my.mercell.com"
+    base_url = "https://my.mercell.com"
     job_platform: str = "Mercell"
-    browser_context: Browser
-
-    def __init__(self, browser: Browser) -> None:
-        self.browser = browser
-        self.username = os.getenv("MERCELL_USERNAME")
-        self.password = os.getenv("MERCELL_PASSWORD")
-
-        if not self.username or not self.password:
-            raise ValueError(
-                "Missing MERCELL_USERNAME or MERCELL_PASSWORD in environment"
-            )
-
-    async def scrape_jobs(self) -> List[Job]:
-        logging.info(f"Starting {self.job_platform}")
-        browser_context: BrowserContext = await self.browser.new_context()
-        page: Page = await browser_context.new_page()
-        await self._login(page)
-        job_overviews: List[JobOverview] = await self._parse_job_overview(page)
-
-        jobs: List[Job] = await self._traverse_job_pages(page, job_overviews)
-
-        await browser_context.close()
-
-        return jobs
 
     async def _login(self, page: Page) -> None:
-        await page.goto(self.BASE_URL + "/en/m/logon/default.aspx?auth0done=true")
+        await page.goto(self.base_url + "/en/m/logon/default.aspx?auth0done=true")
         await page.get_by_role("textbox").fill(self.username)
         await page.get_by_text("Continue").click()
         await page.locator('//*[@id="password"]').fill(self.password)
@@ -271,7 +235,7 @@ class MercellScraper(JobScraper):
         for attempt in range(3):
             try:
                 await page.goto(
-                    f"{self.BASE_URL}/m/mts/MyTenders.aspx", wait_until="networkidle"
+                    f"{self.base_url}/m/mts/MyTenders.aspx", wait_until="networkidle"
                 )
                 break
             except Exception as e:
@@ -356,7 +320,7 @@ class MercellScraper(JobScraper):
                     company=company_text,
                     description="",  # or parse from tooltip if needed
                     delivery_date=delivery_date,
-                    job_uri=self.BASE_URL + job_href,
+                    job_uri=self.base_url + job_href,
                 )
             )
 
