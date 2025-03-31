@@ -22,6 +22,8 @@ class JobScraper(ABC):
         self.browser = browser
         self.username, self.password = self._load_credentials()
 
+        self.logging = logging
+
     def _load_credentials(self) -> tuple[str, str]:
         prefix = self.job_platform.upper()
         username = os.getenv(f"{prefix}_USERNAME")

@@ -17,6 +17,7 @@ from models import Job, JobListModel
 from scrapers.folq import FolqScraper
 from scrapers.verama import VeramaScraper
 from scrapers.mercell import MercellScraper
+from scrapers.emagine import EmagineScraper
 
 logging.basicConfig(level=logging.INFO)
 
@@ -92,7 +93,7 @@ class SlackPoster:
         if len(desc) > 3000:
             desc = desc[:1000]
 
-        main_text = f"Ny utlysning fra {company}"
+        main_text = f"Ny utlysning fra {job.platform}"
         blocks = [
             HeaderBlock(text=PlainTextObject(text=title)),
             SectionBlock(
@@ -109,7 +110,7 @@ class SlackPoster:
         ]
         return main_text, blocks
 
-    def post_job(self, job: Job, channel: str = "job-posting-testing-dev"):
+    def post_job(self, job: Job, channel: str = "job-posting"):
         """
         Posts a single job to Slack.
         """
@@ -131,6 +132,7 @@ async def run_scrapers() -> List[Job]:
             MercellScraper(browser),
             VeramaScraper(browser),
             FolqScraper(browser),
+            EmagineScraper(browser),
         ]
 
         tasks = [scraper.scrape_jobs() for scraper in scrapers]
