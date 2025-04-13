@@ -159,7 +159,7 @@ class JobDescriptionSummarizer:
         if it's in English then the summary is in English.
         Keep the summary under 1500 characters.
 
-        Use markdown as the formatting for the summary.
+        Use markdown for Slack as the formatting for the summary. Use one * instead of two when doing bold headlines.
     """
 
     def __init__(self):
