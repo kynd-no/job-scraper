@@ -15,6 +15,7 @@ class JobOverview:
 class Job(BaseModel):
     job_overview: JobOverview
     description: str
+    description_summarised: str | None = None
     platform: str | None = None
 
     @computed_field

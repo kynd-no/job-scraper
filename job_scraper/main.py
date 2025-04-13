@@ -9,6 +9,9 @@ from slack_sdk.models.blocks import HeaderBlock, SectionBlock, DividerBlock
 from slack_sdk.models.blocks.basic_components import PlainTextObject, MarkdownTextObject
 from dotenv import load_dotenv
 
+from google import genai
+from google.genai import types
+
 from models import Job, JobListModel
 
 from scrapers.folq import FolqScraper
@@ -81,7 +84,7 @@ class SlackPoster:
         title = job.job_overview.title
         company = job.job_overview.company
         due_date = job.job_overview.delivery_date
-        desc = job.description
+        desc = job.description_summarised or job.description
         link = job.job_overview.job_uri
 
         # Slack API only allows a maximum of 3000 characters.
@@ -146,9 +149,41 @@ async def run_scrapers() -> List[Job]:
         return scraped_jobs
 
 
+class JobDescriptionSummarizer:
+    system_instruction: str = """
+        Your job is to summarize job descriptions and make it easy to understand the requirements of the job and what it is about.
+        You will make bullet points when listing out requirements, and will format the summary in a nice and simple manner.
+        Make the summary in the same language as the job description. If it is in Norwegian the summary is in Norwegian, and
+        if it's in English then the summary is in English.
+        Keep the summary under 1500 characters.
+
+        Use markdown as the formatting for the summary.
+    """
+
+    def __init__(self):
+        api_key = os.getenv("GEMINI_API_KEY")
+
+        if not api_key:
+            print(f"No GEMINI_API_KEY in environment")
+            exit(1)
+
+        self.client = genai.Client(api_key=api_key)
+
+    def summarize(self, description: str):
+        response = self.client.models.generate_content(
+            model="gemini-2.0-flash",
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_instruction
+            ),
+            contents=description,
+        )
+        return response.text
+
+
 async def main():
     load_dotenv()
 
+    summarizer = JobDescriptionSummarizer()
     scraped_jobs: List[Job] = await run_scrapers()
 
     slack_poster = SlackPoster()
@@ -159,6 +194,7 @@ async def main():
     logging.info(f"Found {len(scraped_jobs)} jobs in total, {len(new_jobs)} are new.")
 
     for job in new_jobs:
+        job.description_summarised = summarizer.summarize(job.description)
         slack_poster.post_job(job)
 
     change_detector.update_known_jobs(new_jobs)
