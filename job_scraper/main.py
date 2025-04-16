@@ -18,6 +18,7 @@ from scrapers.folq import FolqScraper
 from scrapers.verama import VeramaScraper
 from scrapers.mercell import MercellScraper
 from scrapers.emagine import EmagineScraper
+from scrapers.witted import WittedScraper
 
 logging.basicConfig(level=logging.INFO)
 
@@ -133,6 +134,7 @@ async def run_scrapers() -> List[Job]:
             VeramaScraper(browser),
             FolqScraper(browser),
             EmagineScraper(browser),
+            WittedScraper(browser)
         ]
 
         tasks = [scraper.scrape_jobs() for scraper in scrapers]
