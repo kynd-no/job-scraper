@@ -16,7 +16,7 @@ class EmagineScraper(JobScraper):
             f"{self.base_url}/konsulenter/freelance-jobs/",
             wait_until="domcontentloaded",
         )
-        await page.wait_for_timeout(2000)
+        await page.wait_for_timeout(4000)
 
         job_list_el = await page.query_selector_all("article")
 
