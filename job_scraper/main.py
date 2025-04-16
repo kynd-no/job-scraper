@@ -134,7 +134,7 @@ async def run_scrapers() -> List[Job]:
             VeramaScraper(browser),
             FolqScraper(browser),
             EmagineScraper(browser),
-            WittedScraper(browser)
+            WittedScraper(browser),
         ]
 
         tasks = [scraper.scrape_jobs() for scraper in scrapers]

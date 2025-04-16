@@ -24,15 +24,12 @@ class WittedScraper(JobScraper):
         for job_listing in job_list_el:
             job_title_el = await job_listing.query_selector("h2")
             job_title = await job_title_el.text_content()
-            print(job_title)
 
             job_href = await job_listing.query_selector("a[href]")
             job_uri = await job_href.get_attribute("href")
-            print(job_uri)
 
             job_description_el = await job_listing.query_selector("p")
             job_description = await job_description_el.text_content()
-            print(job_description)
 
             jobs.append(
                 JobOverview(
@@ -40,6 +37,7 @@ class WittedScraper(JobScraper):
                 )
             )
 
+        self.logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
     async def _traverse_job_pages(
@@ -52,9 +50,10 @@ class WittedScraper(JobScraper):
                 wait_until="domcontentloaded",
             )
 
-            description = await page.query_selector('div[class="wysiwyg ingress col-span-12 mp:col-span-8 mp:col-start-5"]')
+            description = await page.query_selector(
+                'div[class="wysiwyg ingress col-span-12 mp:col-span-8 mp:col-start-5"]'
+            )
             description_text = await description.text_content()
-            print(description_text)
 
             jobs.append(
                 Job(

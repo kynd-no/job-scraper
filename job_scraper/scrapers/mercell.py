@@ -4,14 +4,6 @@ from typing import List
 
 from models import Job, JobOverview
 
-import logging
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-
-
 class MercellScraper(JobScraper):
     base_url = "https://my.mercell.com"
     job_platform: str = "Mercell"
@@ -47,7 +39,7 @@ class MercellScraper(JobScraper):
                 # No more pages
                 break
 
-        logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
+        self.logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
     async def _parse_job_overview_table(self, page: Page) -> List[JobOverview]:

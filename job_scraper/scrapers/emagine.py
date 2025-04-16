@@ -41,6 +41,7 @@ class EmagineScraper(JobScraper):
                 )
             )
 
+        self.logging.info(f"Found {len(jobs)} jobs from {self.job_platform}")
         return jobs
 
     async def _traverse_job_pages(
